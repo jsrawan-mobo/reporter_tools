@@ -221,14 +221,14 @@ def extract_audio(proj: Project) -> str:
     run_command_check(ffmpeg_2)
     return audio_path
 
-def extract_srt(proj: Project, duration:int, model_name, vad_model_name, whisper_model_name, gemini_model_name):
+def extract_srt(proj: Project, duration:int, engine, vad_model_name, whisper_model_name, gemini_model_name):
     # Takes an audio file and create an optimized srt file
     project_audio_path = os.path.join(proj.output_path, proj.audio_file)
     
     if engine == 'whisper':
         duration_cmd = f"-d {duration * 1000}" if duration else ""
         vad_cmd = f"--vad -vm ./whisper.cpp/models/{vad_model_name}" 
-        whisper_cmd = [f"./whisper.cpp/main -l en -lpt 2.0 -osrt -m ./whisper.cpp/models/{whisper_model_name} {duration_cmd} {vad_cmd}  -f \"{project_audio_path}\""]
+        whisper_cmd = [f"./whisper.cpp/main -ls -l en -lpt 2.0 -osrt -m ./whisper.cpp/models/{whisper_model_name} {duration_cmd} {vad_cmd}  -f \"{project_audio_path}\""]
         print(whisper_cmd)
 
         run_command_check(whisper_cmd)
@@ -251,6 +251,10 @@ def optimize_srt(proj: Project, max_words: int):
 
 def extract_word_confidence(proj: Project):
     token_confidence_path = os.path.join(proj.output_path, proj.token_confidence_file)
+    if not os.path.isfile(token_confidence_path):
+        print("Token confidence file could not be found, skipping word confidence")
+        return
+
     word_confidence_path = os.path.join(proj.output_path, proj.word_confidence_file)
 
     with open(token_confidence_path, "r") as input_file, open(word_confidence_path, "w") as output_file:
@@ -291,10 +295,10 @@ def main():
     optimize_group.add_argument('-d', '--duration', type=int, default=None, help='max duration in seconds for each file to extract(for testing)')
     optimize_group.add_argument('-m', '--max_words', type=int, default=7, help='Maximum number of words per chunk')
     optimize_group.add_argument('-f', '--filter', type=str, default=None, help='a filter on which projects to process by regex')
-    optimize_group.add_argument('-vm', '--vad_model', type=str, default="ggml-silero-v6.2.0.bin", help='Pick VAD model', required=False)
 
     whisper_group = parser.add_argument_group('Whisper Options (only used if Whisper is selected as engine)')
     whisper_group.add_argument('-l', '--whisper_model', type=str, default="ggml-large-v3.bin", help='Pick whisper model', required=False)
+    whisper_group.add_argument('-vm', '--vad_model', type=str, default="ggml-silero-v6.2.0.bin", help='Pick VAD model', required=False)
 
     gemini_group = parser.add_argument_group('Gemini Options (only used if Gemini is selected as engine)')
     gemini_group.add_argument('-g', '--gemini_model', type=str, default="gemini-3.8-flash", required=False)
