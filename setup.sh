@@ -8,7 +8,7 @@ echo "Detected OS: $OS"
 if [ "$OS" = "Darwin" ]; then
     if ! command -v brew >/dev/null 2>&1; then
         echo "Installing homebrew..."
-        /bin/bash -c /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
 
     brew install ffmpeg cmake pyenv poetry
@@ -33,23 +33,22 @@ else
 fi
 
 # 2. Setup python environment (always do - the check doesn't work)
-if true || ! pyenv versions --bare | grep -qx "$PYTHON_VERSION"; then
-    echo "Installing Python $PYTHON_VERSION..."
-    pyenv install "$PYTHON_VERSION"
-fi
+echo "Installing Python $PYTHON_VERSION..."
+pyenv install "$PYTHON_VERSION"
 pyenv local "$PYTHON_VERSION"
 poetry install
 poetry env activate
 
 # 3. Clone and build Whisper.cpp
+cd src/scripts
+
 if [ ! -d "whisper.cpp" ]; then
     echo "Cloning whisper.cpp..."
     git clone https://github.com/ggerganov/whisper.cpp
 fi
 
-git checkout 1fe009caeda75f69bc864d6370b10674e45a92bd
-
 cd whisper.cpp
+git checkout "$WHISPER_COMMIT"
 cmake -B build
 cmake --build build --config Release
 ln -s ./build/bin/whisper-cli main
