@@ -221,7 +221,7 @@ def extract_audio(proj: Project) -> str:
     run_command_check(ffmpeg_2)
     return audio_path
 
-def extract_srt(proj: Project, duration:int, model_name, vad_model_name, whisper_model_name, gemini_model_name):
+def extract_srt(proj: Project, duration:int, engine, vad_model_name, whisper_model_name, gemini_model_name):
     # Takes an audio file and create an optimized srt file
     project_audio_path = os.path.join(proj.output_path, proj.audio_file)
     
