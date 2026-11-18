@@ -15,6 +15,7 @@ def gemini_extract_srt(audio_path, gemini_model):
         "Do not include conversational preamble or markdown backticks."
     )
 
+
     response = client.models.generate_content(
         model=gemini_model, contents=[uploaded_file, prompt]
     )
@@ -22,3 +23,5 @@ def gemini_extract_srt(audio_path, gemini_model):
     srt_file_path = f"{audio_path}.srt"
     with open(srt_file_path, "w") as f:
         f.write(response.text.strip())
+
+    return srt_file_path
