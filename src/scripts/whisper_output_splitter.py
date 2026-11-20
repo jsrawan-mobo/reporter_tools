@@ -11,6 +11,7 @@ from pathlib import Path
 from shutil import copyfile
 from typing import List, Tuple, NamedTuple
 from gemini_transcriber import gemini_extract_srt
+from datetime import datetime
 
 import nltk
 from nltk.tokenize import sent_tokenize, word_tokenize
@@ -209,6 +210,36 @@ def create_project(proj: Project):
     print(proj)
     copyfile(proj.source_mpeg_path, project_mpeg_path)
 
+def generate_csv_file(project_path):
+    if os.path.isdir(project_path):
+        csv_path = os.path.join(os.path.dirname(project_path), 'default.csv')
+        with open(csv_path, "w") as csv_file:
+            csv_file.write("Source_File_Path,Source_File_Name,Subject_Name,Subject_Tag,Campaign\n")
+            subject_name_dict = {}
+            for mpeg_path in os.listdir(project_path):
+                csv_file.write(f"{project_path},{mpeg_path},")
+
+                mpeg_path = mpeg_path.split('.')[0]
+                subject = mpeg_path.split('_', 1)
+                subject_name_dict[subject[0]] = subject_name_dict.get(subject[0], 0) + 1
+                
+                csv_file.write(f"{subject[0]}")
+                if subject_name_dict[subject[0]] > 1:
+                    csv_file.write(f"V{subject_name_dict[subject[0]]},")
+                else:
+                    csv_file.write(",")
+
+                if len(subject) == 2:
+                    csv_file.write(f"{subject[1]},")
+                else:
+                    csv_file.write(f"{datetime.now().strftime("%Y%m%d")},")
+
+                csv_file.write(f"{os.path.basename(project_path)}\n")
+
+        return csv_path
+
+    return project_path
+
 def extract_audio(proj: Project) -> str:
     # Takes a mpeg file and extracts audio in preparation for srt
     audio_name = Path(proj.audio_file).stem
@@ -221,20 +252,19 @@ def extract_audio(proj: Project) -> str:
     run_command_check(ffmpeg_2)
     return audio_path
 
-def extract_srt(proj: Project, duration:int, model_name, vad_model_name, whisper_model_name, gemini_model_name):
+def extract_srt(proj: Project, duration:int, engine, vad_model_name, whisper_model_name, gemini_model_name):
     # Takes an audio file and create an optimized srt file
     project_audio_path = os.path.join(proj.output_path, proj.audio_file)
     
     if engine == 'whisper':
         duration_cmd = f"-d {duration * 1000}" if duration else ""
         vad_cmd = f"--vad -vm ./whisper.cpp/models/{vad_model_name}" 
-        whisper_cmd = [f"./whisper.cpp/main -l en -lpt 2.0 -osrt -m ./whisper.cpp/models/{whisper_model_name} {duration_cmd} {vad_cmd}  -f \"{project_audio_path}\""]
+        whisper_cmd = [f"./whisper.cpp/main -ls -l en -lpt 2.0 -osrt -m ./whisper.cpp/models/{whisper_model_name} {duration_cmd} {vad_cmd}  -f \"{project_audio_path}\""]
         print(whisper_cmd)
 
         run_command_check(whisper_cmd)
     else:
         gemini_extract_srt(project_audio_path, gemini_model_name)
-        
 
     audio_path = Path(project_audio_path)
     srt_file_path = f"{audio_path}.srt"
@@ -251,6 +281,10 @@ def optimize_srt(proj: Project, max_words: int):
 
 def extract_word_confidence(proj: Project):
     token_confidence_path = os.path.join(proj.output_path, proj.token_confidence_file)
+    if not os.path.isfile(token_confidence_path):
+        print("Token confidence file could not be found, skipping word confidence")
+        return
+
     word_confidence_path = os.path.join(proj.output_path, proj.word_confidence_file)
 
     with open(token_confidence_path, "r") as input_file, open(word_confidence_path, "w") as output_file:
@@ -282,7 +316,7 @@ def main():
 
     core_group = parser.add_argument_group('Core Options')
     core_group.add_argument('-a', '--action', type=Action, choices=list(Action), help='The action type', required=True)
-    core_group.add_argument('-p', '--project_csv_file', type=str, help='The path to the project file to process', required=True)
+    core_group.add_argument('-p', '--project-path', type=str, help='The path to the project file to process', required=True)
     core_group.add_argument('-e', '--engine', type=str, choices=['gemini', 'whisper'], default='whisper', help='The backend to use')
     core_group.add_argument('-n', '--num_projects', type=int, default=None, help='max number of projects process')
     core_group.add_argument('-o', '--output_dirname_override', type=str, default=None, help='OVERRIDE ALL to be in a single folder', required=False)
@@ -291,10 +325,10 @@ def main():
     optimize_group.add_argument('-d', '--duration', type=int, default=None, help='max duration in seconds for each file to extract(for testing)')
     optimize_group.add_argument('-m', '--max_words', type=int, default=7, help='Maximum number of words per chunk')
     optimize_group.add_argument('-f', '--filter', type=str, default=None, help='a filter on which projects to process by regex')
-    optimize_group.add_argument('-vm', '--vad_model', type=str, default="ggml-silero-v6.2.0.bin", help='Pick VAD model', required=False)
 
     whisper_group = parser.add_argument_group('Whisper Options (only used if Whisper is selected as engine)')
     whisper_group.add_argument('-l', '--whisper_model', type=str, default="ggml-large-v3.bin", help='Pick whisper model', required=False)
+    whisper_group.add_argument('-vm', '--vad_model', type=str, default="ggml-silero-v6.2.0.bin", help='Pick VAD model', required=False)
 
     gemini_group = parser.add_argument_group('Gemini Options (only used if Gemini is selected as engine)')
     gemini_group.add_argument('-g', '--gemini_model', type=str, default="gemini-3.8-flash", required=False)
@@ -304,7 +338,7 @@ def main():
     nltk.download('punkt')
     nltk.download('punkt_tab')
 
-    projects = read_projects(args.project_csv_file, args.filter, args.output_dirname_override)
+    projects = read_projects(generate_csv_file(args.project_path), args.filter, args.output_dirname_override)
 
     if args.num_projects:
         projects = projects[:args.num_projects]
