@@ -8,7 +8,7 @@ echo "Detected OS: $OS"
 if [ "$OS" = "Darwin" ]; then
     if ! command -v brew >/dev/null 2>&1; then
         echo "Installing homebrew..."
-        /bin/bash -c /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
 
     brew install ffmpeg cmake pyenv poetry
@@ -32,26 +32,26 @@ else
     exit
 fi
 
-# 2. Setup python environment
-if ! pyenv versions --bare | grep -qx "$PYTHON_VERSION"; then
-    echo "Installing Python $PYTHON_VERSION..."
-    pyenv install "$PYTHON_VERSION"
-fi
-
+# 2. Setup python environment (always do - the check doesn't work)
+echo "Installing Python $PYTHON_VERSION..."
+pyenv install "$PYTHON_VERSION"
+pyenv local "$PYTHON_VERSION"
 poetry install
 poetry env activate
 
 # 3. Clone and build Whisper.cpp
+cd src/scripts
+
 if [ ! -d "whisper.cpp" ]; then
     echo "Cloning whisper.cpp..."
     git clone https://github.com/ggerganov/whisper.cpp
 fi
 
-git checkout 1fe009caeda75f69bc864d6370b10674e45a92bd
-
 cd whisper.cpp
+git checkout "$WHISPER_COMMIT"
 cmake -B build
 cmake --build build --config Release
+ln -s ./build/bin/whisper-cli main
 
 if [ ! -f "models/ggml-large-v3.bin" ]; then
     echo "Downloading GGML large-v3 model..."
@@ -60,7 +60,7 @@ fi
 
 if [ ! -f "models/ggml-silero-v6.2.0.bin" ]; then
     echo "Downloading Silero VAD model..."
-    ./models/download-ggml-model.sh silero-v6.2.0
+    ./models/download-vad-model.sh silero-v6.2.0
 fi
 
 echo "Initialization complete"
